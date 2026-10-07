@@ -5,11 +5,11 @@
 
 ## Video of the Game Before the Changes
 
-<video controls src="./Before Changes.mp4"></video>
+[▶ Watch Video Before the Changes](./Before%20Changes.mp4)
 
 ## Video of the Game After the Changes
 
-<video controls src="./After Changes.mp4"></video>
+[▶ Watch Video After the Changes](./After%20Changes.mp4)
 
 ## Link to ChatGPT Chat Used for Completing the Tasks
 
