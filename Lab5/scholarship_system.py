@@ -1,4 +1,5 @@
 
+"""Scholarship screening system with configurable merit scoring."""
 
 import ast
 import json
@@ -29,33 +30,41 @@ def _evaluate_expression(node, variables):
     if isinstance(node, ast.BinOp) and type(node.op) in allowed_operators:
         left = _evaluate_expression(node.left, variables)
         right = _evaluate_expression(node.right, variables)
+
         if isinstance(node.op, ast.Pow) and abs(right) > 10:
             raise ValueError("Exponent is too large")
+
         return allowed_operators[type(node.op)](left, right)
 
     if isinstance(node, ast.UnaryOp):
         value = _evaluate_expression(node.operand, variables)
+
         if isinstance(node.op, ast.USub):
             return -value
+
         if isinstance(node.op, ast.UAdd):
             return value
 
     raise ValueError("Unsupported or unsafe merit formula")
 
 
-def calculate_merit_score(gpa, credit_count):
-    """Calculate merit from the configured formula."""
-    expression = ast.parse(MERIT_FORMULA, mode="eval")
+def calculate_merit_score(gpa, credit_count, formula=MERIT_FORMULA):
+    """Calculate merit using the configured formula."""
+    expression = ast.parse(formula, mode="eval")
     variables = {"gpa": gpa, "credits": credit_count}
     score = _evaluate_expression(expression.body, variables)
+
     if not isinstance(score, (int, float)) or not (
         float("-inf") < score < float("inf")
     ):
         raise ValueError("Merit score must be finite")
+
     return score
 
 
-def evaluate_applicant(student_id, test_scores, logs=None):
+def evaluate_applicant(
+    student_id, test_scores, logs=None, formula=MERIT_FORMULA
+):
     """Evaluate an applicant and record their eligibility."""
     if logs is None:
         logs = []
@@ -63,27 +72,31 @@ def evaluate_applicant(student_id, test_scores, logs=None):
     gpa = test_scores["gpa"]
     credit_count = test_scores.get("credits", 0)
     income = test_scores.get("income", 0)
-    score = calculate_merit_score(gpa, credit_count)
+
+    score = calculate_merit_score(gpa, credit_count, formula)
     eligible = score >= CUTOFF and income < INCOME_LIMIT
+
     results[student_id] = {"score": score, "eligible": eligible}
     logs.append(f"{student_id} scored {score}")
+
     return eligible
 
 
 def change_formula(new_formula):
-    """Validate and update the merit formula."""
-    global MERIT_FORMULA
+    """Validate a new merit formula and return it."""
     expression = ast.parse(new_formula, mode="eval")
     allowed_names = {"gpa", "credits"}
 
     for node in ast.walk(expression):
         if isinstance(node, ast.Name) and node.id not in allowed_names:
             raise ValueError(f"Unsupported variable: {node.id}")
+
         if isinstance(node, ast.Call):
             raise ValueError("Function calls are not allowed")
 
     _evaluate_expression(expression.body, {"gpa": 1, "credits": 1})
-    MERIT_FORMULA = new_formula
+
+    return new_formula
 
 
 def persist_results(file="scholarships.json"):
@@ -93,19 +106,21 @@ def persist_results(file="scholarships.json"):
 
 
 def load_results(file="scholarships.json"):
-    """Load scholarship results while handling expected file errors."""
-    global results
+    """Load saved results while handling expected file errors."""
     try:
         with open(file, "r", encoding="utf-8") as results_file:
             loaded_results = json.load(results_file)
-        results = loaded_results if isinstance(loaded_results, dict) else {}
+
+        return loaded_results if isinstance(loaded_results, dict) else {}
+
     except (OSError, json.JSONDecodeError):
-        results = {}
+        return {}
 
 
 def print_shortlist():
     """Print eligible applicants and their merit scores."""
     print("Shortlisted applicants:")
+
     for student_id, applicant in results.items():
         if applicant.get("eligible"):
             print(f"  {student_id} score = {applicant['score']}")
@@ -124,19 +139,29 @@ def main():
     )
     evaluate_applicant("U004", {"gpa": 6.5})
 
+    merit_formula = MERIT_FORMULA
     formula = input("Merit formula (Enter to keep default): ").strip()
+
     if formula:
         try:
-            change_formula(formula)
-        except (ValueError, SyntaxError, TypeError, ZeroDivisionError) as error:
+            merit_formula = change_formula(formula)
+        except (
+            ValueError,
+            SyntaxError,
+            TypeError,
+            ZeroDivisionError,
+        ) as error:
             print(f"Invalid merit formula: {error}")
             return
 
     evaluate_applicant(
-        "U005", {"gpa": 8.4, "credits": 3, "income": 600000}
+        "U005",
+        {"gpa": 8.4, "credits": 3, "income": 600000},
+        formula=merit_formula,
     )
+
     persist_results()
-    load_results()
+    results.update(load_results())
     print_shortlist()
 
 
